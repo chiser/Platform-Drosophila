@@ -1,10 +1,10 @@
 # Set working directory where I save the data
 
-
+setwd("C:/Users/LocalAdmin/Desktop")
 # Import in a dataframe just the values. Information concerning the experiment will be read further on if necessary. Add as.vector() if necessary.
 #filename <- id_table[a]
-filename <- "Gr66a_5_w_mit.dat"
-
+filename <- "test1.dat"
+skip<-36
 #filename <- paste(scan(n=1),".dat", sep="")
 data <- read.table(filename, header = FALSE, sep = "\t", quote = "\"" , dec = ".", fill = TRUE, skip = skip , comment.char = "", nrows = 6001-skip,col.names=c("n","t.s.","pos1","pos2","pos3"))
 
@@ -78,7 +78,7 @@ MaxSample<-max(data$Sampling)
 
 switch_on <- (data$pos1 > Hysteresis) # potential signals to turn on the light
 switch_off <- (data$pos1 < -Hysteresis) # potential switch-off signals
-data$state <- vector("logical",length= lengthExp) 
+data$state <- vector("logical",length= lengthExp) # vector allocation for light ON/OFF state
 
 data$state[1] <- data$pos1[1] # the default initial state is chosen as "ON". 
 data$state[1] <- check_switch(data$state[1],switch_off[1],switch_on[1])
@@ -199,7 +199,7 @@ ShowPI2<-paste("The PI by events is",PI2,sep=" ")
 
 #Number of frames. TODO: I could make a for loop to avoid doing so many columns
 
-}
+
 # I have tried to to it in a for loop but I can´t index within a function. I have to see how can I do it
 #excerps2 <- vector("numeric", length=20)
 #for (i in 1:9){
@@ -209,7 +209,7 @@ ShowPI2<-paste("The PI by events is",PI2,sep=" ")
  #    excerps2<- c(excerps2,end[i],beg[i+1])
  #  }
   #}
-
+warning("by Christian: there is a problem with the end dataframe. It is no where done! It might have been accidentally deleted")
 
 end1 <- end(1,0)
 beg2 <- end(1,1)
@@ -342,28 +342,28 @@ excerps <- c(beg1=1, end1 = end1,beg2= beg2,end2= end2,beg3= beg3,end3= end3,beg
 #}
 #AccBiase <- return(AccBias)
 
-AccBias1 <- AcumBias(data$pos1,1,end1)
-AccBias2 <- AcumBias(data$pos1,beg2,end2)
-AccBias3 <- AcumBias(data$pos1,beg3,end3)
-AccBias4 <- AcumBias(data$pos1,beg4,end4)
-AccBias5 <- AcumBias(data$pos1,beg5,end5)
-AccBias6 <- AcumBias(data$pos1,beg6,end6)
-AccBias7 <- AcumBias(data$pos1,beg7,end7)
-AccBias8 <- AcumBias(data$pos1,beg8,end8)
-AccBias9 <- AcumBias(data$pos1,beg9,end9)
-AccBias10 <- AcumBias(data$pos1,beg10,end10)
+#AccBias1 <- AcumBias(data$pos1,1,end1)
+#AccBias2 <- AcumBias(data$pos1,beg2,end2)
+#AccBias3 <- AcumBias(data$pos1,beg3,end3)
+#AccBias4 <- AcumBias(data$pos1,beg4,end4)
+#AccBias5 <- AcumBias(data$pos1,beg5,end5)
+#AccBias6 <- AcumBias(data$pos1,beg6,end6)
+#AccBias7 <- AcumBias(data$pos1,beg7,end7)
+#AccBias8 <- AcumBias(data$pos1,beg8,end8)
+#AccBias9 <- AcumBias(data$pos1,beg9,end9)
+#AccBias10 <- AcumBias(data$pos1,beg10,end10)
 
 #Another way of doing it without function
-#AccBias1 <- sum(data$pos1[1:end1])
-#AccBias2 <- sum(data$pos1[beg2:end2])
-#AccBias3 <- sum(data$pos1[beg3:end3])
-#AccBias4 <- sum(data$pos1[beg4:end4])
-#AccBias5 <- sum(data$pos1[beg5:end5])
-#AccBias6 <- sum(data$pos1[beg6:end6])
-#AccBias7 <- sum(data$pos1[beg7:end7])
-#AccBias8 <- sum(data$pos1[beg8:end8])  
-#AccBias9 <- sum(data$pos1[beg9:end9])
-#AccBias10 <- sum(data$pos1[beg10:end10])
+AccBias1 <- sum(data$pos1[1:end1])
+AccBias2 <- sum(data$pos1[beg2:end2])
+AccBias3 <- sum(data$pos1[beg3:end3])
+AccBias4 <- sum(data$pos1[beg4:end4])
+AccBias5 <- sum(data$pos1[beg5:end5])
+AccBias6 <- sum(data$pos1[beg6:end6])
+AccBias7 <- sum(data$pos1[beg7:end7])
+AccBias8 <- sum(data$pos1[beg8:end8])  
+AccBias9 <- sum(data$pos1[beg9:end9])
+AccBias10 <- sum(data$pos1[beg10:end10])
 
 AccBias <- c(AccBias1 = AccBias1, AccBias2 = AccBias2, AccBias3 = AccBias3, AccBias4 = AccBias4, AccBias5 = AccBias5, AccBias6 = AccBias6, AccBias7 = AccBias7, AccBias8 = AccBias8, AccBias9 = AccBias9, AccBias10 = AccBias10)
 # Introducing time into one vector in the ms scale. Taking out the cumulative amount. This is easily done with the Sampling variable shown above
