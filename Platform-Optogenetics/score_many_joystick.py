@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import re
 from matplotlib import pylab
+import matplotlib.patches as patches
 from tkinter.filedialog import askopenfilename
 import warnings
 #from itertools import islice
@@ -35,7 +36,41 @@ import warnings
 _digits = re.compile('\d')
 def contains_digits(d):
      return bool(_digits.search(d))
- 
+
+def extract_ONOFFbouts(side,fly_data):
+    light_change=np.diff(side=='ON')
+    light_change=np.insert(light_change,False,0,axis=1)
+    ind_light_change=np.where(light_change)
+    
+    fly_change=np.where(np.diff(ind_light_change[0]))
+    ind_light_change2=np.insert(ind_light_change[1],[fly_change[0][0]+1,fly_change[0][1]+1,len(ind_light_change[1])],24000)
+    ind_light_change2=np.insert(ind_light_change2,[0,fly_change[0][0]+2,fly_change[0][1]+3],0)
+    
+    ind_fly_change=np.insert(ind_light_change[0],[fly_change[0][0]+1,fly_change[0][1]+1,len(ind_light_change[0])],[0,1,2])
+    ind_fly_change=np.insert(ind_fly_change,[0,fly_change[0][0]+2,fly_change[0][1]+3],[0,1,2])
+    
+    fly1=ind_light_change2[ind_fly_change==0]
+    fly2=ind_light_change2[ind_fly_change==1]
+    fly3=ind_light_change2[ind_fly_change==2]
+    
+    traces_length1=np.diff(fly1);
+    traces_length2=np.diff(fly2);
+    traces_length3=np.diff(fly3);
+    
+    trace_bout1=np.array([[None]*max(traces_length1)]*len(traces_length1),dtype=float)
+    trace_bout2=np.array([[None]*max(traces_length2)]*len(traces_length2),dtype=float)
+    trace_bout3=np.array([[None]*max(traces_length3)]*len(traces_length3),dtype=float)
+    trace1=fly_data.loc[:,2]
+    trace2=fly_data.loc[:,3]
+    trace3=fly_data.loc[:,4]
+    for i in range(len(traces_length1)):
+                 trace_bout1[i,range(traces_length1[i])]=trace1[fly1[i]:fly1[i+1]]
+    for i in range(len(traces_length2)):
+                 trace_bout2[i,range(traces_length2[i])]=trace2[fly2[i]:fly2[i+1]]
+    for i in range(len(traces_length3)):
+                 trace_bout3[i,range(traces_length3[i])]=trace3[fly3[i]:fly3[i+1]]
+    return [trace_bout1,trace_bout2,trace_bout3]
+
 ## Side vector to know where the fly is: in the light On side, off side or in between the hysteresis 
 def side_which(lengthExp,fly_data,Hysteresis,platform,rightside,leftside):
     side = [''  for x in range(lengthExp-1)];
@@ -80,13 +115,11 @@ def PI_time(fly,digitized):
         PI[i-1]=[data[digitized == i].mean()];    
     return np.asarray(PI)
 
-def fetch_PIfrommeta(line):
-    
+def fetch_PIfrommeta(line):    
     segment=[None]*10;
     a=fly_metadata[line];
     a= a.split();       
     subst=0;
-
     for i in range(1, len(a)):
         if contains_digits(a[i]):
             segment[i-1-subst]= float(a[i]);
@@ -97,7 +130,6 @@ def fetch_PIfrommeta(line):
     return np.asarray(segment) 
 
 def fetch_modefrommeta(line,fromm):
-    
     segment=[None]*10;
     a=fly_metadata[line];
     a= a.split();       
@@ -107,12 +139,18 @@ def fetch_modefrommeta(line,fromm):
 
 def PI_discrete(light,digitized):    
     PI_discrete=[None]*10;
-    light=np.insert(light,[1],True,axis=0);
+    light=np.insert(light,[0],True,axis=0);
     if len(light)<len(digitized):
         light=np.insert(light,[1],True,axis=0);               
     for i in range(min(digitized),max(digitized)+1):
         PI_discrete[i-1]=(sum(light[digitized == i]==True)-sum(light[digitized == i]==False))/len(light[digitized == i]);
     return np.asarray(PI_discrete)
+
+def PI_discrete_ohnehyst(fly_data,digitized):    
+    PI_discrete_ohne=[None]*10;               
+    for i in range(min(digitized),max(digitized)+1):
+        PI_discrete_ohne[i-1]=(sum(fly_data[digitized == i]>0)-sum(fly_data[digitized == i]<0))/len(fly_data[digitized == i]);
+    return np.asarray(PI_discrete_ohne)
 
 def range_threshold(fly_data,TimeExp,num_segs):
     segments = np.linspace(fly_data.loc[0,1], TimeExp ,num=num_segs+1, endpoint=True, retstep=False, dtype=None);
@@ -152,12 +190,17 @@ os.getcwd() # Prints the working directory
 os.chdir('c:\\Users\LocalAdmin\Desktop\JoystickPraktikum')
 
 # Ask for the number and store it in nFlies
-#nFlies = input('Give me an integer number: ')
+nFlies = input('Give me an integer number: ')
 
 # Make sure the input is an integer number
-#nFlies = int(nFlies)
-nFlies=1
+nFlies = int(nFlies)
+#nFlies=1
 #nFlies=2;
+ON_wiggle2=np.array([[None]*3]*nFlies,dtype=float);
+OFF_wiggle2=np.array([[None]*3]*nFlies,dtype=float);
+ON_wiggle=np.array([[None]*3]*nFlies,dtype=float);
+OFF_wiggle=np.array([[None]*3]*nFlies,dtype=float);
+software_PI=np.array([[None]*10]*nFlies,dtype=float);
 PI_disc_all=np.asarray([[[None]*10]*3]*nFlies);
 PI_time_all=np.asarray([[[None]*10]*3]*nFlies);            
 right_batch=[None]*nFlies;
@@ -194,7 +237,7 @@ for oo in range(nFlies):
     #length of the experiment
     lengthExp = fly_metadata[29];
     lengthExp= int(lengthExp.split()[-1]);
-                  
+    lengthExp = 24001;              
     #Time of the experiment
     TimeExp = max(fly_data[1]);
     
@@ -203,12 +246,13 @@ for oo in range(nFlies):
     segments = np.linspace(fly_data.loc[0,1], TimeExp ,num=11, endpoint=True, retstep=False, dtype=None);
                           
     # Three subplots, the axes array is 1-d
+    '''
     f, axarr = plt.subplots(3, sharex=True)
     axarr[0].plot(fly_data[1],fly_data[2]);
     axarr[0].set_title('Fly traces')
     axarr[1].plot(fly_data[1],fly_data[3]);
     axarr[2].plot(fly_data[1],fly_data[4]);                             
-    
+    '''
     ## Trying sliding window     
     #fly2=window(fly_data[2], n=2400)
     #indexx=0;
@@ -276,7 +320,7 @@ for oo in range(nFlies):
     total[0]=PI1s;
     total[1]=PI2s;     
     total[2]=PI3s;  
-
+    software_PI[oo,:]=np.nanmean(total,axis=0);
     """
     ######################## Working with the data   ####################
     """
@@ -323,9 +367,23 @@ for oo in range(nFlies):
     PI_discrete1=PI_discrete(light1,digitized);
     PI_discrete2=PI_discrete(light2,digitized);
     PI_discrete3=PI_discrete(light3,digitized);
-    PI_disc=np.vstack((PI_discrete1,PI_discrete2,PI_discrete3));                         
+    #PI_discrete1=PI_discrete_ohnehyst(fly_data.loc[:,2],digitized);
+    #PI_discrete2=PI_discrete_ohnehyst(fly_data.loc[:,3],digitized);
+    #PI_discrete3=PI_discrete_ohnehyst(fly_data.loc[:,4],digitized);
+    PI_disc=np.vstack((PI_discrete1,PI_discrete2,PI_discrete3));
+
+    #PI_discrete1_ohne=PI_discrete_ohnehyst(fly_data.loc[:,2],digitized);
+    #PI_discrete2_ohne=PI_discrete_ohnehyst(fly_data.loc[:,3],digitized);
+    #PI_discrete3_ohne=PI_discrete_ohnehyst(fly_data.loc[:,4],digitized);
     #PI_disc[keep_fly]=float('nan');
-    PI_disc[del_fly]=float('nan');                        
+    PI_disc[del_fly]=float('nan');
+
+    #fly_movement=np.diff(fly_data.loc[:,[2,3,4]],axis=0);
+    #fly_movement=np.transpose(np.insert(fly_movement,[0],0,axis=0));
+    #mov_light=np.cumsum(np.abs(fly_movement[light]));
+    #mov_nolight=np.cumsum(np.abs(fly_movement[np.invert(light)]));
+    #switch=np.diff(light,axis=1)
+    #switch=np.insert(switch,[0],False,axis=1)
     ## To plot one of them separatedly
 #    plt.figure()               
 #    xplot = range(len(PItime1));             
@@ -357,8 +415,58 @@ for oo in range(nFlies):
 #    plt.xticks([0,1], my_xticks)
 
     #A = np.array((fly_data[2],fly_data[3],fly_data[4]), dtype=float);
-                
-               
+    
+    ## Extracting bouts while light is on and off and plotting the traces
+    [trace_bout1,trace_bout2,trace_bout3]=extract_ONOFFbouts(side,fly_data)
+    '''            
+    plt.figure()
+    plt.plot(np.transpose(trace_bout1))
+    plt.title("Traces ON/OFF bouts fly1")
+    plt.figure()
+    plt.plot(np.transpose(trace_bout2))
+    plt.title("Traces ON/OFF bouts fly2")
+    plt.figure()
+    plt.plot(np.transpose(trace_bout3))
+    plt.title("Traces ON/OFF bouts fly3")
+    '''
+    ### Quantifying wiggle while lights are on/off        
+    for i in range(3):
+        if i==0:
+            fly_num=trace_bout1
+        elif i==1:
+            fly_num=trace_bout2
+        elif i==2:
+            fly_num=trace_bout3            
+        
+        a=fly_num[0::2,]>0
+        b=fly_num[1::2,]>0                     
+        
+        if rightside:
+            if a.any():
+                ON_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,])))
+                OFF_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,])))
+                ON_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,],n=2)))
+                OFF_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,],n=2)))                
+            elif b.any():
+                OFF_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,])))
+                ON_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,])))
+                OFF_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,],n=2)))
+                ON_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,],n=2)))                
+        elif leftside:
+            if a.any():
+                OFF_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,])))
+                ON_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,])))
+                OFF_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,],n=2)))
+                ON_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,],n=2)))                
+ 
+            elif b.any():
+                ON_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,])))
+                OFF_wiggle[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,]))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,])))
+                ON_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[0::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[0::2,],n=2)))
+                OFF_wiggle2[oo,i]=np.nansum(np.nansum(abs(np.diff(fly_num[1::2,],n=2))))/np.count_nonzero(~np.isnan(np.diff(fly_num[1::2,],n=2)))                
+ 
+        
+           
     flies_used[[(3*oo),(3*oo+1),(3*oo+2)]]=keep_fly;            
     right_batch[oo]=rightside;
     left_batch[oo]=leftside;        
@@ -400,35 +508,36 @@ if any(left):
         data=np.array(PI_time_all[left,a],float);
         Sem_time_popul_left[a]=np.nanstd(data)/math.sqrt(len(data)-sum(np.isnan(data)));
 
-    PI_disc_popul_left=np.nanmean(np.nanmean(PI_disc_all[left,:,:],axis=0,dtype=float),axis=0,dtype=float);
+    PI_disc_popul_left=np.nanmean(PI_disc_all[left,:],axis=0,dtype=float);
     #PI_disc_popul_left = np.vstack(PI_disc_popul_left[:]).astype(np.float);
     Sem_disc_popul_left=np.array([None]*10,dtype=float);
     for a in range(10):
-        data=np.array(PI_disc_all[left,:,a],float);
-        Sem_disc_popul_left[a]=np.nanstd(data)/math.sqrt(data.shape[1]);
+        data=np.array(PI_disc_all[left,a],float);
+        Sem_disc_popul_left[a]=np.nanstd(data)/math.sqrt(len(data)-sum(np.isnan(data)));
 
     ## Plot PIs by time from the three platforms together
-x = pylab.arange(len(PI_time_popul_right));
-plt.figure()
+x = pylab.arange(10);
+fig1=plt.figure()
 ax = plt.subplot()
 if any(right) & any(left):
     rightbar_time=ax.bar(x-0.2, PI_time_popul_right,width=0.3,color='b',yerr=Sem_time_popul_right,align='center')
     leftbar_time=ax.bar(x+0.2,PI_time_popul_left,width=0.3,color='g',yerr=Sem_time_popul_left,align='center')
     ax.legend((rightbar_time, leftbar_time), ('Right', 'Left'))    
 elif not any(left) & any(right):
-    rightbar_time=ax.bar(x, PI_time_popul_right,width=0.8,color='b',yerr=Sem_time_popul_right,align='center')
-    ax.legend((rightbar_time), ['Right'])
-else:    
     leftbar_time=ax.bar(x,PI_time_popul_left,width=0.8,color='g',yerr=Sem_time_popul_left,align='center')
     ax.legend(leftbar_time, ['Left'])
+else:    
+    rightbar_time=ax.bar(x, PI_time_popul_right,width=0.8,color='b',yerr=Sem_time_popul_right,align='center')
+    ax.legend((rightbar_time), ['Right'])
 my_xticks = Mode1;
 plt.xticks(range(0,10), my_xticks)
 plt.xlabel("Training segment")
 plt.ylabel("Weighted PI")
 plt.title("PI by segment (weighted)")
+fig1.savefig('Extended_weighted.png', dpi=90, bbox_inches='tight')
 
-x = pylab.arange(len(PI_disc_popul_right));
-plt.figure()
+x = pylab.arange(10);
+fig2=plt.figure()
 ax2 = plt.subplot()
 if any(right) & any(left):
     rightbar=ax2.bar(x-0.2,PI_disc_popul_right,width=0.3,color='b',yerr=Sem_disc_popul_right,align='center')
@@ -442,10 +551,11 @@ else:
     ax2.legend(leftbar, ['Left'])
 my_xticks = Mode1
 plt.xticks(range(0,10), my_xticks)
+ax2.add_patch(patches.Rectangle((-1, 0), 11, 1,alpha=0.2,facecolor="red"))
 plt.xlabel("Training segment")
 plt.ylabel("Logical PI")
 plt.title("PI by segment (logical)")
-
+fig2.savefig('Extended_logical.png', dpi=90, bbox_inches='tight')
 
 if any(left):
     Te_sem_left_disc=float(stats.sem(PI_disc_all[left,-1]));    
@@ -475,7 +585,19 @@ if any(left):
     Re_mean_left_disc=np.mean(PI_disc_popul_left[1::2]);
     Re_mean_left_time=np.mean(PI_time_popul_left[1::2]);                            
 '''
-
+Te_sem_all_disc=float(stats.sem(PI_disc_all[~np.isnan(PI_disc_all[:,-1]),-1]));    
+Te_sem_all_time=float(stats.sem(PI_time_all[~np.isnan(PI_time_all[:,-1]),-1]));   
+Te_mean_all_disc=np.nanmean(PI_disc_all[:,-1]);    
+Te_mean_all_time=np.nanmean(PI_time_all[:,-1]);                                        
+preTe_sem_all_disc=float(stats.sem(PI_disc_all[~np.isnan(PI_disc_all[:,0]),0]));    
+preTe_sem_all_time=float(stats.sem(PI_time_all[~np.isnan(PI_time_all[:,0]),0]));    
+preTe_mean_all_disc=np.nanmean(PI_disc_all[:,0]);    
+preTe_mean_all_time=np.nanmean(PI_time_all[:,0]);
+Re_sem_all_disc=stats.sem(np.nanmean(PI_disc_all[~np.isnan(PI_disc_all[:,0]),1:9],axis=1),axis=0);
+Re_sem_all_time=stats.sem(np.nanmean(PI_disc_all[~np.isnan(PI_disc_all[:,0]),1:9],axis=1),axis=0);                       
+Re_mean_all_disc=np.nanmean(np.nanmean(PI_disc_all[:,1:9],axis=1),axis=0);                       
+Re_mean_all_time=np.nanmean(np.nanmean(PI_disc_all[:,1:9],axis=1),axis=0); 
+                              
 if any(right):                             
     Te_sem_right_disc=float(stats.sem(PI_disc_all[right,-1]));    
     Te_sem_right_time=float(stats.sem(PI_time_all[right,-1]));   
@@ -500,10 +622,8 @@ if any(right):
 #Te_mean_left_time=np.mean(PI_time_popul_left[0::2]);                         
                          
 
-
-
 x = pylab.arange(1);
-plt.figure()
+fig3=plt.figure()
 ax2 = plt.subplot()
 if any(right) & any(left):
     x = pylab.arange(2);
@@ -521,44 +641,107 @@ elif (not any(left)) & any(right):
     my_xticks = ['Right']
     plt.xticks(range(0,1), my_xticks)
 else:
-    preTe=ax2.bar(x-0.32,preTe_mean_left_disc ,width=0.4,color='g', yerr=preTe_sem_left_disc,align='center')
-    Reinf=ax2.bar(x,Re_mean_left_disc ,width=0.4,color='b', yerr=Re_sem_left_disc,align='center')
-    Test=ax2.bar(x+0.32,Te_mean_left_disc ,width=0.4,color='g', yerr=Te_sem_left_disc,align='center')
+    preTe=ax2.bar(x-0.32,preTe_mean_left_disc ,width=0.3,color='g', yerr=preTe_sem_left_disc,align='center')
+    Reinf=ax2.bar(x,Re_mean_left_disc ,width=0.3,color='b', yerr=Re_sem_left_disc,align='center')
+    Test=ax2.bar(x+0.32,Te_mean_left_disc ,width=0.3,color='g', yerr=Te_sem_left_disc,align='center')
     ax2.legend((preTe,Reinf, Test), ('Pretest','Reinforcement', 'Test'))
     my_xticks = ['Left']
     plt.xticks(range(0,1), my_xticks)    
 plt.xlabel("Treatment")
 plt.ylabel("Logical PI")
 plt.title("PI by treatment")
-
-
+ax2.add_patch(patches.Rectangle((-1, 0), 3, 1,alpha=0.2,facecolor="red"))
+fig3.savefig('Summary_logical.png', dpi=90, bbox_inches='tight')
 
 x = pylab.arange(1);
-plt.figure()
+fig4=plt.figure()
 ax2 = plt.subplot()
-if any(left):
-    preTe=ax2.bar(x-0.32,preTe_mean_left_time ,width=0.4,color='g', yerr=preTe_sem_left_time,align='center')
-    Reinf=ax2.bar(x,Re_mean_left_time ,width=0.3,color='b', yerr=Re_sem_left_time,align='center')
-    Test=ax2.bar(x+0.32,Te_mean_left_time ,width=0.3,color='g', yerr=Te_sem_left_time,align='center')
+if any(right) & any(left):
+    x = pylab.arange(2);    
+    preTe=ax2.bar(x-0.32,[preTe_mean_right_time,preTe_mean_left_time],width=0.3,color='g', yerr=[preTe_sem_right_time,preTe_sem_left_time],align='center')
+    Reinf=ax2.bar(x,[Re_mean_right_time,Re_mean_left_time],width=0.3,color='b', yerr=[Re_sem_right_time,Re_sem_left_time],align='center')
+    Test=ax2.bar(x+0.32,[Te_mean_right_time,Te_mean_left_time],width=0.3,color='g', yerr=[Te_sem_right_time,Te_sem_left_time],align='center')
     ax2.legend((Reinf, Test), ('Reinforcement', 'Test'))
-    my_xticks = ['Left']
-    plt.xticks(range(0,1), my_xticks)
-elif any(right):
+    my_xticks = ['Right','Left']
+    plt.xticks(range(0,2), my_xticks)    
+elif (not any(left)) & any(right):
     preTe=ax2.bar(x-0.32,preTe_mean_right_time ,width=0.3,color='g', yerr=preTe_sem_right_time,align='center')
     Reinf=ax2.bar(x,Re_mean_right_time ,width=0.3,color='b', yerr=Re_sem_right_time,align='center')
     Test=ax2.bar(x+0.32,Te_mean_right_time ,width=0.3,color='g', yerr=Te_sem_right_time,align='center')
     ax2.legend((Reinf, Test), ('Reinforcement', 'Test'))
     my_xticks = ['Right']
     plt.xticks(range(0,1), my_xticks)
-else:
-    x = pylab.arange(2);    
-    preTe=ax2.bar(x-0.32,[preTe_mean_right_disc,preTe_mean_left_time],width=0.3,color='g', yerr=[preTe_sem_right_disc,preTe_sem_left_time],align='center')
-    Reinf=ax2.bar(x,[Re_mean_right_time,Re_mean_left_time],width=0.3,color='b', yerr=[Re_sem_right_time,Re_sem_left_time],align='center')
-    Test=ax2.bar(x+0.32,[Te_mean_right_time,Te_mean_left_time],width=0.3,color='g', yerr=[Te_sem_right_time,Te_sem_left_time],align='center')
+else:   
+    preTe=ax2.bar(x-0.32,preTe_mean_left_time ,width=0.3,color='g', yerr=preTe_sem_left_time,align='center')
+    Reinf=ax2.bar(x,Re_mean_left_time ,width=0.3,color='b', yerr=Re_sem_left_time,align='center')
+    Test=ax2.bar(x+0.32,Te_mean_left_time ,width=0.3,color='g', yerr=Te_sem_left_time,align='center')
     ax2.legend((Reinf, Test), ('Reinforcement', 'Test'))
-    my_xticks = ['Right','Left']
-    plt.xticks(range(0,2), my_xticks)
+    my_xticks = ['Left']
+    plt.xticks(range(0,1), my_xticks)
 plt.xlabel("Treatment")
 plt.ylabel("Weighted PI")
 plt.title("PI by treatment")
-                           
+fig4.savefig('Summary_weighted.png', dpi=90, bbox_inches='tight')
+
+
+x = pylab.arange(1);
+fig3=plt.figure()
+ax2 = plt.subplot()
+preTe=ax2.bar(x-0.32,preTe_mean_all_disc ,width=0.3,color='g', yerr=preTe_sem_all_disc,align='center')
+Reinf=ax2.bar(x,Re_mean_all_disc ,width=0.3,color='b', yerr=Re_sem_all_disc,align='center')
+Test=ax2.bar(x+0.32,Te_mean_all_disc ,width=0.3,color='g', yerr=Te_sem_all_disc,align='center')
+ax2.legend((preTe,Reinf, Test), ('Pretest','Reinforcement', 'Test'))
+my_xticks = ['Pooled']
+plt.xticks(range(0,1), my_xticks)
+
+#soft=np.nanmean(software_PI,axis=0);
+plt.figure()                           
+plt.plot(np.transpose(PI_time_all[right,:]))
+
+plt.figure()                           
+plt.plot(np.transpose(PI_time_all[left,:]))
+
+plt.figure()                           
+plt.plot(np.transpose(PI_disc_all[right,:]))
+
+plt.figure()                           
+plt.plot(np.transpose(PI_disc_all[left,:]))
+
+OFF_wiggle=np.reshape(OFF_wiggle,[1,nFlies*3])
+ON_wiggle=np.reshape(ON_wiggle,[1,nFlies*3])
+
+OFF_wiggle2=np.reshape(OFF_wiggle2,[1,nFlies*3])
+ON_wiggle2=np.reshape(ON_wiggle2,[1,nFlies*3])
+
+sem_ON=stats.sem(ON_wiggle[~np.isnan(ON_wiggle)]);                       
+mean_ON=np.nanmean(ON_wiggle);
+sem_OFF=stats.sem(OFF_wiggle[~np.isnan(OFF_wiggle)]);                       
+mean_OFF=np.nanmean(OFF_wiggle);
+
+sem_ON2=stats.sem(ON_wiggle2[~np.isnan(ON_wiggle2)]);                       
+mean_ON2=np.nanmean(ON_wiggle2);
+sem_OFF2=stats.sem(OFF_wiggle2[~np.isnan(OFF_wiggle2)]);                       
+mean_OFF2=np.nanmean(OFF_wiggle2);                
+                
+fig5=plt.figure()
+ar = plt.subplot()
+on_plot=ar.bar(0,mean_ON,width=0.6,color='b', yerr=sem_ON,align='center')
+off_plot=ar.bar(1,mean_OFF,width=0.6,color='g', yerr=sem_OFF,align='center')
+my_xticks = ['ON','OFF']
+plt.xticks(range(2), my_xticks)  
+plt.xlabel("Light state")
+plt.ylabel("Wiggling score")
+plt.title("Wiggling on light/darkness")
+fig5.savefig('wiggle.png', dpi=90, bbox_inches='tight') 
+
+
+fig6=plt.figure()
+ar = plt.subplot()
+on_plot=ar.bar(0,mean_ON2,width=0.6,color='b', yerr=sem_ON2,align='center')
+off_plot=ar.bar(1,mean_OFF2,width=0.6,color='g', yerr=sem_OFF2,align='center')
+my_xticks = ['ON','OFF']
+plt.xticks(range(2), my_xticks)  
+plt.xlabel("Light state")
+plt.ylabel("Wiggling score")
+plt.title("Wiggling on light/darkness, derivative tau=2")
+fig6.savefig('wiggle2.png', dpi=90, bbox_inches='tight') 

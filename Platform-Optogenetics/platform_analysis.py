@@ -352,7 +352,6 @@ plt.ylabel("Position in platform")
 plt.title("Measured points in each of the platforms")
 
 
-
 ONdynamics=A[light==True];
 OFFdynamics=A[light==False];
 timexthree=np.vstack((fly_data[1],fly_data[1],fly_data[1]));
