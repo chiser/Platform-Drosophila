@@ -75,6 +75,10 @@ for(i in 1:Nexp){
   light_side2 <- c(as.character(info$V3[10]),as.character(info$V4[10]),as.character(info$V5[10]),as.character(info$V6[10]),as.character(info$V7[10]),as.character(info$V8[10]),as.character(info$V9[10]),as.character(info$V10[10]),as.character(info$V11[10]),as.character(info$V12[10])) 
   light_side3 <- c(as.character(info$V3[14]),as.character(info$V4[14]),as.character(info$V5[14]),as.character(info$V6[14]),as.character(info$V7[14]),as.character(info$V8[14]),as.character(info$V9[14]),as.character(info$V10[14]),as.character(info$V11[14]),as.character(info$V12[14])) 
 
+  right_platform1 <- all(light_side1=="right")
+  right_platform2 <- all(light_side2=="right")
+  right_platform3 <- all(light_side3=="right")
+  
   TimeExp <- data$t.s.[lengthExp]   # The total time it took for the experiment to complete
   data$Sampling<-c(0,diff(data$t.s., lag = 1)) # Calculating Inter Sample intervals (ISI)
   MaxSample<-max(data$Sampling)  # Checking what it the maximal ISI
@@ -107,14 +111,15 @@ for(i in 1:Nexp){
   
   
   if(keep_fly1){
-  
     data$state1 <- ligth_state(data$pos1,Hysteresis)
     
+    if(right_platform1==FALSE){ data$state1 <- !data$state1}
+      
     PI_platform1 <- vector("numeric", length = 10)
     for(oo in 1:10){
-        PI_platform1[oo] <- calculate_PI(data$state1[segment[oo]:segment[oo+1]])
+            PI_platform1[oo] <- calculate_PI(data$state1[segment[oo]:segment[oo+1]])
     }
-  
+      
     PI_platform[3*i-2,] <- PI_platform1
   }
   
@@ -122,6 +127,8 @@ for(i in 1:Nexp){
   if(keep_fly2){
     
     data$state2 <- ligth_state(data$pos2,Hysteresis)
+    
+    if(right_platform2==FALSE){ data$state2 <- !data$state2}
     
     PI_platform2 <- vector("numeric", length = 10)
     for(oo in 1:10){
@@ -134,6 +141,8 @@ for(i in 1:Nexp){
   if(keep_fly3){
     
     data$state3 <- ligth_state(data$pos3,Hysteresis)
+    
+    if(right_platform3==FALSE){ data$state3 <- !data$state3}
     
     PI_platform3 <- vector("numeric", length = 10)
     for(oo in 1:10){
