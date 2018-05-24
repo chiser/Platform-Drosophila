@@ -37,6 +37,7 @@ calculate_PI <- function(state_vector) {
 
 setwd("C:/Users/LocalAdmin/Desktop/DrosoPraktikum_Joystick_2018")
 
+tested_flies <- read.table("C:/Users/LocalAdmin/Desktop/data/platform_data2017/tested_flies.txt", quote="\"", comment.char="")
 
 ########################################## Initialize some parameters  ###########################################
 
@@ -44,8 +45,9 @@ skip<-37
 message("please enter the fly name")
 group_name <- scan(n=1,what= character())   #Name of the group
 
-message("please enter the number of experiments")
-Nexp <- scan(n=1,what= numeric())   #Number of flies
+#message("please enter the number of experiments")
+#Nexp <- scan(n=1,what= numeric())   #Number of flies
+Nexp <- length(tested_flies$V1)
 
 PI_platform <- matrix(NA, 3*Nexp, 10)    # Variable where PIs are saved
 
@@ -54,16 +56,15 @@ for(i in 1:Nexp){
 
 ############################## Import in a dataframe just the values. ################################
   
-  data <- read.table(file.choose(), header = FALSE, sep = "\t", quote = "\"" , dec = ".", fill = TRUE, skip = skip , comment.char = "", nrows = 24037-skip,col.names=c("n","t.s.","pos1","pos2","pos3"))
-
+  #data <- read.table(file.choose(), header = FALSE, sep = "\t", quote = "\"" , dec = ".", fill = TRUE, skip = skip , comment.char = "", nrows = 24037-skip,col.names=c("n","t.s.","pos1","pos2","pos3"))
+  data <- read.table(as.character(tested_flies$V1[i]), header = FALSE, sep = "\t", quote = "\"" , dec = ".", fill = TRUE, skip = skip , comment.char = "", nrows = 24037-skip,col.names=c("n","t.s.","pos1","pos2","pos3"))
 
 ################################### Import in a dataframe the information of the experiments. ############################################
 
 
-  info <-read.table(file.choose(), header = FALSE, sep = "", 
+  info <-read.table(as.character(tested_flies$V1[i]), header = FALSE, sep = "", 
              col.names = paste0("V",seq_len(17)), fill = TRUE)
   info  <- info[1:20,]
-
 
 ######################################## Extracting some parameters from the meta data #########################################
 
